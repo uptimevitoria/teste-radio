@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receptor de Emergência Marítima - Sintonia 99.7</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #07080b;
+      color: #94a3b8;
+      font-family: 'Courier New', Courier, monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    /* Moldura Principal com Escala Quase Fullscreen (16:9 Preservado) */
+    .radio-chassis {
+      position: relative;
+      width: min(96vw, calc(91vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 8px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+      overflow: hidden;
+    }
+
+    /* Imagem de Fundo */
+    .chassis-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* --- AGULHA DESLIZANTE DO VISOR (FREQUENCY METER) --- */
+    .meter-window {
+      position: absolute;
+      top: 17%;
+      left: 6%;
+      width: 43%;
+      height: 24%;
+      pointer-events: none;
+      z-index: 5;
+      overflow: hidden;
+    }
+
+    .tuner-needle {
+      position: absolute;
+      top: 0;
+      left: var(--needle-pos, 20%);
+      width: 3px;
+      height: 100%;
+      background: #ffaa22;
+      box-shadow: 0 0 8px #ff7700, 0 0 15px rgba(255, 170, 34, 0.7);
+      transform: translateX(-50%);
+      transition: left 0.05s linear;
+    }
+
+    /* HUD Digital de Apoio */
+    .frequency-hud {
+      position: absolute;
+      top: 5%;
+      left: 6%;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid #10b981;
+      border-radius: 4px;
+      padding: 4px 10px;
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      z-index: 7;
+    }
+
+    .freq-val {
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      font-weight: bold;
+      color: #34d399;
+      letter-spacing: 2px;
+      text-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+      font-family: monospace;
+    }
+
+    .freq-tag {
+      font-size: clamp(0.55rem, 0.9vw, 0.75rem);
+      color: #059669;
+      letter-spacing: 1px;
+    }
+
+    /* --- BOTÃO GIRATÓRIO (KNOB FIXO) --- */
+    .knob-container {
+      position: absolute;
+      top: 49%;
+      left: 72.5%;
+      width: 35%;
+      aspect-ratio: 1 / 1;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      z-index: 10;
+    }
+
+    .knob-container.grabbing {
+      cursor: grabbing;
+    }
+
+    #knobImg {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform-origin: center center;
+      filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.9));
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Interruptor Power */
+    .power-switch-area {
+      position: absolute;
+      bottom: 8%;
+      left: 7%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+    }
+
+    .switch-btn {
+      width: 44px;
+      height: 24px;
+      background: #1e293b;
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      border: 1px solid #475569;
+      transition: background 0.2s;
+    }
+
+    .switch-lever {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #94a3b8;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .switch-btn.on {
+      background: #064e3b;
+      border-color: #10b981;
+    }
+
+    .switch-btn.on .switch-lever {
+      transform: translateX(20px);
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+    }
+
+    .power-label {
+      font-size: 0.75rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      color: #cbd5e1;
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    .hint span {
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="radio-chassis" id="chassis">
+    <!-- Imagem de fundo -->
+    <img src="radio_base.jpg" alt="Rádio Zenith" class="chassis-bg" onerror="this.src='radio_base.png'">
+
+    <!-- HUD Digital -->
+    <div class="frequency-hud">
+      <div class="freq-val" id="freqDisplay">--.-</div>
+      <div class="freq-tag">MHz</div>
+    </div>
+
+    <!-- Janela de Varredura da Agulha (Frequency Meter) -->
+    <div class="meter-window">
+      <div class="tuner-needle" id="tunerNeedle"></div>
+    </div>
+
+    <!-- Botão Giratório -->
+    <div class="knob-container" id="knobWrapper">
+      <img src="knob.png" id="knobImg" alt="Knob">
+    </div>
+
+    <!-- Chave Power -->
+    <div class="power-switch-area">
+      <div class="switch-btn" id="powerBtn">
+        <div class="switch-lever"></div>
+      </div>
+      <span class="power-label" id="powerLabel">POWER: OFF</span>
+    </div>
+  </div>
+
+  <p class="hint">Clique e <span>gire circularmente</span> o botão para sintonizar a frequência.</p>
+
+  <!-- Áudios Locais -->
+  <audio id="audioMessage" src="mensagem.mp3" loop preload="auto"></audio>
+  <audio id="audioStatic" src="estatica.mp3" loop preload="auto"></audio>
+
+  <script>
+    const TARGET_FREQ = 99.7;
+    const MIN_FREQ = 88.0;
+    const MAX_FREQ = 108.0;
+    const SENSITIVITY = 0.55;
+
+    const MIN_ROT = -135;
+    const MAX_ROT = 135;
+
+    const NEEDLE_MIN_X = 6;
+    const NEEDLE_MAX_X = 94;
+
+    let currentFreq = 90.5;
+    let isPowered = false;
+
+    const freqDisplay = document.getElementById('freqDisplay');
+    const knobWrapper = document.getElementById('knobWrapper');
+    const knobImg = document.getElementById('knobImg');
+    const tunerNeedle = document.getElementById('tunerNeedle');
+    const powerBtn = document.getElementById('powerBtn');
+    const powerLabel = document.getElementById('powerLabel');
+    const audioMessage = document.getElementById('audioMessage');
+    const audioStatic = document.getElementById('audioStatic');
+
+    powerBtn.addEventListener('click', () => {
+      isPowered = !isPowered;
+      powerBtn.classList.toggle('on', isPowered);
+      powerLabel.textContent = isPowered ? "POWER: ON" : "POWER: OFF";
+
+      if (isPowered) {
+        audioMessage.play().catch(e => console.warn("Aguardando interação:", e));
+        audioStatic.play().catch(e => console.warn("Aguardando interação:", e));
+        updateTuning(currentFreq);
+      } else {
+        freqDisplay.textContent = "--.-";
+        audioMessage.pause();
+        audioStatic.pause();
+      }
+    });
+
+    function updateTuning(newFreq) {
+      currentFreq = Math.min(MAX_FREQ, Math.max(MIN_FREQ, newFreq));
+
+      if (isPowered) {
+        freqDisplay.textContent = currentFreq.toFixed(1);
+      }
+
+      const percent = (currentFreq - MIN_FREQ) / (MAX_FREQ - MIN_FREQ);
+
+      const rot = MIN_ROT + (percent * (MAX_ROT - MIN_ROT));
+      knobImg.style.transform = `rotate(${rot}deg)`;
+
+      const needlePos = NEEDLE_MIN_X + (percent * (NEEDLE_MAX_X - NEEDLE_MIN_X));
+      tunerNeedle.style.left = `${needlePos}%`;
+
+      if (!isPowered) return;
+
+      const delta = Math.abs(currentFreq - TARGET_FREQ);
+
+      if (delta <= SENSITIVITY) {
+        const factor = 1 - (delta / SENSITIVITY);
+        audioMessage.volume = Math.pow(factor, 2);
+        audioStatic.volume = Math.max(0.03, 1 - Math.pow(factor, 1.5));
+      } else {
+        audioMessage.volume = 0;
+        audioStatic.volume = 0.85;
+      }
+    }
+
+    let isDragging = false;
+    let startAngle = 0;
+    let freqAtDragStart = 0;
+
+    function getCenterCoordinates(element) {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    }
+
+    knobWrapper.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      knobWrapper.classList.add('grabbing');
+
+      const center = getCenterCoordinates(knobWrapper);
+      startAngle = Math.atan2(e.clientY - center.y, e.clientX - center.x) * (180 / Math.PI);
+      freqAtDragStart = currentFreq;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const center = getCenterCoordinates(knobWrapper);
+      const currentAngle = Math.atan2(e.clientY - center.y, e.clientX - center.x) * (180 / Math.PI);
+
+      let deltaAngle = currentAngle - startAngle;
+
+      if (deltaAngle > 180) deltaAngle -= 360;
+      if (deltaAngle < -180) deltaAngle += 360;
+
+      const totalRotRange = MAX_ROT - MIN_ROT;
+      const totalFreqRange = MAX_FREQ - MIN_FREQ;
+      const freqDelta = (deltaAngle / totalRotRange) * totalFreqRange;
+
+      updateTuning(freqAtDragStart + freqDelta);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        knobWrapper.classList.remove('grabbing');
+      }
+    });
+
+    knobWrapper.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const step = e.deltaY < 0 ? 0.1 : -0.1;
+      updateTuning(currentFreq + step);
+    });
+
+    updateTuning(currentFreq);
+  </script>
+</body>
+</html>
