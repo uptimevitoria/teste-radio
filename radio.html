@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Receptor de Emergência Marítima - Sintonia 99.7</title>
+  <title>Emergency VHF Receiver - Dual Station</title>
   <style>
     * {
       box-sizing: border-box;
@@ -24,7 +24,7 @@
       overflow: hidden;
     }
 
-    /* Moldura Principal com Escala Quase Fullscreen (16:9 Preservado) */
+    /* Moldura Principal do Rádio Zenith */
     .radio-chassis {
       position: relative;
       width: min(96vw, calc(91vh * 16 / 9));
@@ -46,7 +46,7 @@
       z-index: 1;
     }
 
-    /* --- AGULHA DESLIZANTE DO VISOR (FREQUENCY METER) --- */
+    /* Janela da Agulha (Tuner Glass) */
     .meter-window {
       position: absolute;
       top: 17%;
@@ -100,7 +100,7 @@
       letter-spacing: 1px;
     }
 
-    /* --- BOTÃO GIRATÓRIO (KNOB FIXO) --- */
+    /* Knob de Sintonia */
     .knob-container {
       position: absolute;
       top: 49%;
@@ -126,7 +126,7 @@
       pointer-events: none;
     }
 
-    /* Interruptor Power */
+    /* Chave Power */
     .power-switch-area {
       position: absolute;
       bottom: 8%;
@@ -196,7 +196,7 @@
 
   <div class="radio-chassis" id="chassis">
     <!-- Imagem de fundo -->
-    <img src="radio_base.jpg" alt="Rádio Zenith" class="chassis-bg" onerror="this.src='radio_base.png'">
+    <img src="radio_base.jpg" alt="Zenith Chassis" class="chassis-bg" onerror="this.src='radio_base.png'">
 
     <!-- HUD Digital -->
     <div class="frequency-hud">
@@ -204,12 +204,12 @@
       <div class="freq-tag">MHz</div>
     </div>
 
-    <!-- Janela de Varredura da Agulha (Frequency Meter) -->
+    <!-- Visor Analógico da Agulha -->
     <div class="meter-window">
       <div class="tuner-needle" id="tunerNeedle"></div>
     </div>
 
-    <!-- Botão Giratório -->
+    <!-- Knob Rotativo -->
     <div class="knob-container" id="knobWrapper">
       <img src="knob.png" id="knobImg" alt="Knob">
     </div>
@@ -223,17 +223,23 @@
     </div>
   </div>
 
-  <p class="hint">Clique e <span>gire circularmente</span> o botão para sintonizar a frequência.</p>
+  <p class="hint">Toggle <span>POWER</span>. Click and drag dial in a <span>circular motion</span> to scan frequencies.</p>
 
-  <!-- Áudios Locais -->
-  <audio id="audioMessage" src="mensagem.mp3" loop preload="auto"></audio>
+  <!-- Áudios em Loop Paralelo -->
+  <audio id="audioVincent" src="vincent.mp3" loop preload="auto"></audio>
+  <audio id="audioAlbatross" src="mensagem.mp3" loop preload="auto"></audio>
   <audio id="audioStatic" src="estatica.mp3" loop preload="auto"></audio>
 
   <script>
-    const TARGET_FREQ = 99.7;
+    // ==========================================
+    // ESTAÇÕES E FREQUÊNCIAS CONFIGURADAS
+    // ==========================================
+    const FREQ_VINCENT = 93.4;     // Missão Principal (Pai / Pistas da Section B)
+    const FREQ_ALBATROSS = 99.7;   // Easter Egg / Lore (O Barco na Tempestade)
+
     const MIN_FREQ = 88.0;
     const MAX_FREQ = 108.0;
-    const SENSITIVITY = 0.55;
+    const SENSITIVITY = 0.55;      // Janela de recepção (MHz)
 
     const MIN_ROT = -135;
     const MAX_ROT = 135;
@@ -241,34 +247,43 @@
     const NEEDLE_MIN_X = 6;
     const NEEDLE_MAX_X = 94;
 
-    let currentFreq = 90.5;
+    let currentFreq = 89.5;
     let isPowered = false;
 
+    // Elementos DOM
     const freqDisplay = document.getElementById('freqDisplay');
     const knobWrapper = document.getElementById('knobWrapper');
     const knobImg = document.getElementById('knobImg');
     const tunerNeedle = document.getElementById('tunerNeedle');
     const powerBtn = document.getElementById('powerBtn');
     const powerLabel = document.getElementById('powerLabel');
-    const audioMessage = document.getElementById('audioMessage');
+    
+    const audioVincent = document.getElementById('audioVincent');
+    const audioAlbatross = document.getElementById('audioAlbatross');
     const audioStatic = document.getElementById('audioStatic');
 
+    // Liga / Desliga
     powerBtn.addEventListener('click', () => {
       isPowered = !isPowered;
       powerBtn.classList.toggle('on', isPowered);
       powerLabel.textContent = isPowered ? "POWER: ON" : "POWER: OFF";
 
       if (isPowered) {
-        audioMessage.play().catch(e => console.warn("Aguardando interação:", e));
-        audioStatic.play().catch(e => console.warn("Aguardando interação:", e));
+        audioVincent.play().catch(e => console.warn(e));
+        audioAlbatross.play().catch(e => console.warn(e));
+        audioStatic.play().catch(e => console.warn(e));
         updateTuning(currentFreq);
       } else {
         freqDisplay.textContent = "--.-";
-        audioMessage.pause();
+        audioVincent.pause();
+        audioAlbatross.pause();
         audioStatic.pause();
       }
     });
 
+    // ==========================================
+    // SINTONIA E CROSSFADE MULTI-ESTAÇÃO
+    // ==========================================
     function updateTuning(newFreq) {
       currentFreq = Math.min(MAX_FREQ, Math.max(MIN_FREQ, newFreq));
 
@@ -278,26 +293,53 @@
 
       const percent = (currentFreq - MIN_FREQ) / (MAX_FREQ - MIN_FREQ);
 
+      // 1. Rotação do Knob
       const rot = MIN_ROT + (percent * (MAX_ROT - MIN_ROT));
       knobImg.style.transform = `rotate(${rot}deg)`;
 
+      // 2. Movimento da Agulha
       const needlePos = NEEDLE_MIN_X + (percent * (NEEDLE_MAX_X - NEEDLE_MIN_X));
       tunerNeedle.style.left = `${needlePos}%`;
 
       if (!isPowered) return;
 
-      const delta = Math.abs(currentFreq - TARGET_FREQ);
+      // 3. Cálculo de Distância para as Duas Estações
+      const deltaVincent = Math.abs(currentFreq - FREQ_VINCENT);
+      const deltaAlbatross = Math.abs(currentFreq - FREQ_ALBATROSS);
 
-      if (delta <= SENSITIVITY) {
-        const factor = 1 - (delta / SENSITIVITY);
-        audioMessage.volume = Math.pow(factor, 2);
-        audioStatic.volume = Math.max(0.03, 1 - Math.pow(factor, 1.5));
+      let activeVolume = 0;
+
+      // Canal Vincent (93.4)
+      if (deltaVincent <= SENSITIVITY) {
+        const factorV = 1 - (deltaVincent / SENSITIVITY);
+        const volV = Math.pow(factorV, 2);
+        audioVincent.volume = volV;
+        activeVolume = Math.max(activeVolume, volV);
       } else {
-        audioMessage.volume = 0;
+        audioVincent.volume = 0;
+      }
+
+      // Canal Albatross (99.7)
+      if (deltaAlbatross <= SENSITIVITY) {
+        const factorA = 1 - (deltaAlbatross / SENSITIVITY);
+        const volA = Math.pow(factorA, 2);
+        audioAlbatross.volume = volA;
+        activeVolume = Math.max(activeVolume, volA);
+      } else {
+        audioAlbatross.volume = 0;
+      }
+
+      // Estática: cai quando qualquer uma das duas emissoras ganha força
+      if (activeVolume > 0) {
+        audioStatic.volume = Math.max(0.03, 1 - Math.pow(activeVolume, 0.75));
+      } else {
         audioStatic.volume = 0.85;
       }
     }
 
+    // ==========================================
+    // ROTAÇÃO ANGULAR RADIAL (ARRASTO NO MOUSE)
+    // ==========================================
     let isDragging = false;
     let startAngle = 0;
     let freqAtDragStart = 0;
@@ -344,12 +386,14 @@
       }
     });
 
+    // Ajuste fino pelo scroll do mouse
     knobWrapper.addEventListener('wheel', (e) => {
       e.preventDefault();
       const step = e.deltaY < 0 ? 0.1 : -0.1;
       updateTuning(currentFreq + step);
     });
 
+    // Inicialização da agulha
     updateTuning(currentFreq);
   </script>
 </body>
